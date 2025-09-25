@@ -1,0 +1,17 @@
+model:
+  biencoder: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  reranker: cross-encoder/ms-marco-MiniLM-L-12-v2
+runtime:
+  use_ocr: false
+  use_reranker: true
+  device: auto         # auto|cpu|cuda
+thresholds:
+  cosine_candidate: 0.82
+  cosine_strict: 0.86
+  jaccard5_heavy: 0.80
+  simhash_hamming_loose: 16
+  min_span_tokens: 20
+  rerank_min: 0.50     # NGƯỠNG CE: càng cao càng chặt
+windowing:
+  min_tokens: 120
+  max_tokens: 500
