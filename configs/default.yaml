@@ -1,17 +1,23 @@
+# ============================================
+# File: configs/default.yaml
+# ============================================
+profile: default # recall|default|strict
 model:
-  biencoder: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-  reranker: cross-encoder/ms-marco-MiniLM-L-12-v2
+  embed_model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  reranker_model: cross-encoder/ms-marco-MiniLM-L-12-v2
 runtime:
+  device: auto # auto|cpu|cuda
   use_ocr: false
   use_reranker: true
-  device: auto         # auto|cpu|cuda
-thresholds:
-  cosine_candidate: 0.82
-  cosine_strict: 0.86
-  jaccard5_heavy: 0.80
-  simhash_hamming_loose: 16
-  min_span_tokens: 20
-  rerank_min: 0.50     # NGƯỠNG CE: càng cao càng chặt
+  strip_refs: true # có cắt 'Tài liệu tham khảo' khỏi chấm điểm?
 windowing:
   min_tokens: 120
   max_tokens: 500
+  overlap_pct: 0.25 # 25% chồng lấn
+thresholds:
+  cosine_candidate: 0.82
+  cosine_strict: 0.86
+  rerank_min: 0.50 # NGƯỠNG CE: càng cao càng chặt
+  jaccard5_heavy: 0.80
+  simhash_hamming_loose: 16
+  min_span_tokens: 20

@@ -1,0 +1,17 @@
+# ============================================
+# File: configs/strict.yaml
+# ============================================
+profile: strict
+thresholds:
+  cosine_candidate: 0.84
+  cosine_strict: 0.88
+  rerank_min: 0.70
+  jaccard5_heavy: 0.85
+  simhash_hamming_loose: 12
+  min_span_tokens: 24
+windowing:
+  min_tokens: 140
+  max_tokens: 520
+  overlap_pct: 0.20
+runtime:
+  strip_refs: true

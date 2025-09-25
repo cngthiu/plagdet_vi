@@ -1,0 +1,17 @@
+# ============================================
+# File: configs/recall.yaml
+# ============================================
+profile: recall
+thresholds:
+  cosine_candidate: 0.75
+  cosine_strict: 0.82
+  rerank_min: 0.45
+  jaccard5_heavy: 0.70
+  simhash_hamming_loose: 24
+  min_span_tokens: 12
+windowing:
+  min_tokens: 60
+  max_tokens: 300
+  overlap_pct: 0.30
+runtime:
+  strip_refs: false

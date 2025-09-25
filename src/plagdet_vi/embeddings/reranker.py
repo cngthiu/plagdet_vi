@@ -1,10 +1,11 @@
 # ============================================
 # File: src/plagdet_vi/embeddings/reranker.py
 # ============================================
+# ============================================
+# File: src/plagdet_vi/embeddings/reranker.py
+# ============================================
 from __future__ import annotations
 from typing import List, Tuple, Optional
-
-# Cross-Encoder; có thể thiếu nếu chưa cài sentence-transformers
 try:
     from sentence_transformers import CrossEncoder
 except Exception:
@@ -12,24 +13,22 @@ except Exception:
 
 _RERANKER = None
 
-def load_reranker(model_name: Optional[str], device: str = "auto"):
-    """
-    Trả về None nếu không cấu hình hoặc thư viện thiếu.
-    Why: đảm bảo pipeline vẫn chạy được.
-    """
+def _pick_device(device: str) -> str:
+    if device in ("cpu","cuda"): return device
+    try:
+        import torch
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    except Exception:
+        return "cpu"
+
+def load_reranker(model_name: Optional[str], device: str):
+    if not model_name or CrossEncoder is None: return None
     global _RERANKER
-    if not model_name or CrossEncoder is None:
-        return None
     if _RERANKER is None:
-        # CE tự chọn device nếu không truyền; tuỳ chọn pass device.
-        kwargs = {}
-        if device in ("cpu", "cuda"):
-            kwargs["device"] = device
-        _RERANKER = CrossEncoder(model_name, **kwargs)
+        dev = _pick_device(device)
+        _RERANKER = CrossEncoder(model_name, device=dev)
     return _RERANKER
 
 def rerank_pairs(reranker, pairs: List[Tuple[str, str]]) -> List[float]:
-    if reranker is None or not pairs:
-        return [0.0]*len(pairs)
-    scores = reranker.predict(pairs)
-    return [float(x) for x in scores]
+    if reranker is None or not pairs: return [0.0]*len(pairs)
+    return [float(x) for x in reranker.predict(pairs)]
