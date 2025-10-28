@@ -4,6 +4,10 @@
 from __future__ import annotations
 from typing import List, Tuple
 import numpy as np
+try:
+    import faiss  # type: ignore
+except Exception:
+    faiss = None  # type: ignore
 
 from ..config.settings import Settings
 from ..io.extract_pdf import read_pdf_text
@@ -29,6 +33,58 @@ def _prepare_windows(text: str, cfg: Settings) -> tuple[list[str], list[str]]:
     wins = window_paragraphs(blocks["paras"], cfg.win_min_tokens, cfg.win_max_tokens, cfg.win_overlap_pct)
     return wins, [lower_nodiac(w) for w in wins]
 
+def _cast_embeddings(emb: np.ndarray, dtype: str) -> np.ndarray:
+    dt = dtype.lower()
+    if dt == "float16":
+        return np.ascontiguousarray(emb.astype(np.float16))
+    return np.ascontiguousarray(emb.astype(np.float32))
+
+def _mine_candidates(E_a: np.ndarray, E_b: np.ndarray, cfg: Settings) -> List[Tuple[int, int, float]]:
+    pairs: List[Tuple[int, int, float]] = []
+    Ea32 = E_a.astype(np.float32, copy=False)
+    Eb32 = E_b.astype(np.float32, copy=False)
+    if cfg.use_faiss and faiss is not None and Ea32.size and Eb32.size:
+        dim = Eb32.shape[1]
+        index = faiss.IndexFlatIP(dim)
+        index.add(Eb32)
+        q_batch = max(1, int(cfg.faiss_query_batch))
+        top_k = max(1, int(cfg.faiss_top_k))
+        for i0 in range(0, Ea32.shape[0], q_batch):
+            i1 = min(Ea32.shape[0], i0 + q_batch)
+            queries = Ea32[i0:i1]
+            scores, idxs = index.search(queries, top_k)
+            for offset, (row_scores, row_idxs) in enumerate(zip(scores, idxs)):
+                i = i0 + offset
+                for score, j in zip(row_scores, row_idxs):
+                    if j < 0:
+                        continue
+                    score = float(np.clip(score, -1.0, 1.0))
+                    if score >= cfg.cosine_candidate:
+                        pairs.append((i, int(j), score))
+        return pairs
+
+    batch = max(1, int(cfg.similarity_batch))
+    topk = max(0, int(cfg.max_candidates_per_window))
+    for i0 in range(0, Ea32.shape[0], batch):
+        i1 = min(Ea32.shape[0], i0 + batch)
+        sims = np.clip(Ea32[i0:i1] @ Eb32.T, -1.0, 1.0)
+        for row_idx, row in enumerate(sims):
+            i = i0 + row_idx
+            mask = row >= cfg.cosine_candidate
+            idx = np.flatnonzero(mask)
+            if idx.size == 0:
+                continue
+            if topk > 0 and idx.size > topk:
+                vals = row[idx]
+                take = np.argpartition(vals, -topk)[-topk:]
+                idx = idx[take]
+            order = np.argsort(row[idx])[::-1]
+            for j in idx[order]:
+                score = float(row[j])
+                if score >= cfg.cosine_candidate:
+                    pairs.append((i, int(j), score))
+    return pairs
+
 def compare_paths(path_a: str, path_b: str, out_dir: str, cfg: Settings) -> dict:
     text_a = _read_any(path_a, cfg.use_ocr)
     text_b = _read_any(path_b, cfg.use_ocr)
@@ -47,27 +103,37 @@ def compare_paths(path_a: str, path_b: str, out_dir: str, cfg: Settings) -> dict
     s_b = [simhash_128(p.split()) for p in paras_b_nd]
 
     # Embeddings
-    E_a = embed_texts(paras_a, cfg.embed_model, device=cfg.device)
-    E_b = embed_texts(paras_b, cfg.embed_model, device=cfg.device)
-    sim = np.clip(E_a @ E_b.T, -1.0, 1.0)
+    E_a = _cast_embeddings(embed_texts(paras_a, cfg.embed_model, device=cfg.device, batch_size=cfg.embed_batch_size), cfg.embed_dtype)
+    E_b = _cast_embeddings(embed_texts(paras_b, cfg.embed_model, device=cfg.device, batch_size=cfg.embed_batch_size), cfg.embed_dtype)
 
     # Candidate mining
-    pairs: List[Tuple[int,int,float]] = []
-    for i in range(sim.shape[0]):
-        row = sim[i]
-        idx = np.argwhere(row >= cfg.cosine_candidate).reshape(-1)
-        for j in idx: pairs.append((i, int(j), float(row[int(j)])))
+    pairs: List[Tuple[int,int,float]] = _mine_candidates(E_a, E_b, cfg)
+    pairs.sort(key=lambda x: -x[2])
+    if cfg.max_pairs_total > 0 and len(pairs) > cfg.max_pairs_total:
+        pairs = pairs[:cfg.max_pairs_total]
+    del E_a
+    del E_b
 
     # Rerank
     rr_model = load_reranker(cfg.reranker_model, cfg.device) if cfg.use_reranker else None
     if rr_model is not None and pairs:
-        rr_scores = rerank_pairs(rr_model, [(paras_a[i], paras_b[j]) for (i,j,_) in pairs])
-        pairs_rr = [(i,j,cos,rr) for (rr,(i,j,cos)) in zip(rr_scores, pairs) if rr >= cfg.rerank_min]
+        limit = cfg.max_rerank_pairs if cfg.max_rerank_pairs > 0 else len(pairs)
+        primary = pairs[:limit]
+        tail = pairs[limit:]
+        rr_inputs = [(paras_a[i], paras_b[j]) for (i, j, _) in primary]
+        rr_scores = rerank_pairs(rr_model, rr_inputs)
+        pairs_rr = [(i, j, cos, rr) for (rr, (i, j, cos)) in zip(rr_scores, primary) if rr >= cfg.rerank_min]
         pairs_rr.sort(key=lambda x: (x[3], x[2]), reverse=True)
+        del rr_inputs
+        del rr_scores
+        if tail:
+            pairs_rr.extend((i, j, cos, 0.0) for (i, j, cos) in tail)
         pairs = pairs_rr
     else:
         pairs.sort(key=lambda x: -x[2])
         pairs = [(i,j,cos,0.0) for (i,j,cos) in pairs]
+
+    pairs.sort(key=lambda x: (x[3], x[2]), reverse=True)
 
     # Refine + alignment
     spans: List[MatchSpan] = []

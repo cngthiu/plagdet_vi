@@ -9,9 +9,18 @@ thresholds:
   jaccard5_heavy: 0.85
   simhash_hamming_loose: 12
   min_span_tokens: 24
+  max_candidates_per_window: 15
+  max_pairs_total: 2500
+  max_rerank_pairs: 1200
 windowing:
   min_tokens: 140
   max_tokens: 520
   overlap_pct: 0.20
 runtime:
   strip_refs: true
+  use_faiss: false
+  faiss_top_k: 15
+  faiss_query_batch: 256
+  similarity_batch: 128
+  embed_batch_size: 64
+  embed_dtype: float32

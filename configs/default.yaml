@@ -4,12 +4,18 @@
 profile: default # recall|default|strict
 model:
   embed_model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-  reranker_model: cross-encoder/ms-marco-MiniLM-L-12-v2
+  reranker_model: cross-encoder/ms-marco-MiniLM-L-6-v2
 runtime:
   device: auto # auto|cpu|cuda
   use_ocr: false
   use_reranker: true
   strip_refs: true # có cắt 'Tài liệu tham khảo' khỏi chấm điểm?
+  use_faiss: false # bật nếu đã cài faiss để tăng tốc cosine search
+  faiss_top_k: 20
+  faiss_query_batch: 256
+  similarity_batch: 128
+  embed_batch_size: 64
+  embed_dtype: float32 # float32|float16
 windowing:
   min_tokens: 120
   max_tokens: 500
@@ -21,3 +27,6 @@ thresholds:
   jaccard5_heavy: 0.80
   simhash_hamming_loose: 16
   min_span_tokens: 20
+  max_candidates_per_window: 20 # giới hạn số ứng viên cosine / cửa sổ
+  max_pairs_total: 4000 # giới hạn tổng ứng viên cosine
+  max_rerank_pairs: 2000

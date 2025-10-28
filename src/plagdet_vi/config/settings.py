@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     use_ocr: bool = False
     use_reranker: bool = True
     strip_refs: bool = True
+    use_faiss: bool = False       # Dùng FAISS (nếu có) để truy vấn cosine nhanh
+    faiss_top_k: int = 20         # Số ứng viên lấy mỗi cửa sổ khi dùng FAISS
+    faiss_query_batch: int = 256  # Batch khi query FAISS
+    similarity_batch: int = 128   # Batch khi nhân ma trận cosine thường
+    embed_batch_size: int = 64    # Batch size khi encode embedding
+    embed_dtype: str = "float32"  # float32|float16
 
     # Thresholds
     cosine_candidate: float = 0.82
@@ -26,6 +32,9 @@ class Settings(BaseSettings):
     jaccard5_heavy: float = 0.80
     simhash_hamming_loose: int = 16
     min_span_tokens: int = 20
+    max_candidates_per_window: int = 20  # 0 = không giới hạn
+    max_pairs_total: int = 4000          # 0 = không giới hạn (sau khi gom tất cả)
+    max_rerank_pairs: int = 2000         # 0 = không giới hạn, tránh reranker quá tải
 
     # Windowing
     win_min_tokens: int = 120
@@ -86,6 +95,15 @@ def load_settings(config_path: str | None = None) -> Settings:
         "use_ocr": y.get("runtime", {}).get("use_ocr", False),
         "use_reranker": y.get("runtime", {}).get("use_reranker", True),
         "strip_refs": y.get("runtime", {}).get("strip_refs", True),
+        "use_faiss": y.get("runtime", {}).get("use_faiss", False),
+        "faiss_top_k": y.get("runtime", {}).get("faiss_top_k", 20),
+        "faiss_query_batch": y.get("runtime", {}).get("faiss_query_batch", 256),
+        "similarity_batch": y.get("runtime", {}).get("similarity_batch", 128),
+        "embed_batch_size": y.get("runtime", {}).get("embed_batch_size", 64),
+        "embed_dtype": y.get("runtime", {}).get("embed_dtype", "float32"),
+        "max_candidates_per_window": y.get("thresholds", {}).get("max_candidates_per_window", 20),
+        "max_pairs_total": y.get("thresholds", {}).get("max_pairs_total", 4000),
+        "max_rerank_pairs": y.get("thresholds", {}).get("max_rerank_pairs", 2000),
         "cosine_candidate": y.get("thresholds", {}).get("cosine_candidate", 0.82),
         "cosine_strict": y.get("thresholds", {}).get("cosine_strict", 0.86),
         "rerank_min": y.get("thresholds", {}).get("rerank_min", 0.50),
