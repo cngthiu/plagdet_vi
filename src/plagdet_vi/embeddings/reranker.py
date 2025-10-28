@@ -1,9 +1,7 @@
 # ============================================
 # File: src/plagdet_vi/embeddings/reranker.py
 # ============================================
-# ============================================
-# File: src/plagdet_vi/embeddings/reranker.py
-# ============================================
+
 from __future__ import annotations
 from typing import List, Tuple, Optional
 try:

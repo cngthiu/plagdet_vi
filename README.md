@@ -8,7 +8,6 @@
     curl -X POST "http://localhost:8000/compare?a=path/to/A.pdf&b=path/to/B.docx&out=reports"
 
 ```
-
 src
  ┣ plagdet_vi
  ┃ ┣ __pycache__
